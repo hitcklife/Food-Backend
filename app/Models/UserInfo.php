@@ -11,9 +11,15 @@ class UserInfo extends Model
     protected $table = 'users_info';
     protected $guarded = [''];
     public $timestamps = false;
+    protected $primaryKey = 'user_id';
+
 
     public function company()
     {
         return $this->hasOne(UserCompany::class, 'id', 'company_id');
+    }
+
+    public function user(){
+        return $this->belongsTo(User::class, 'id', 'user_id');
     }
 }

@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 use App\Models\UserCompany;
 use App\Models\UserInfo;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use Validator;
@@ -120,13 +121,51 @@ class AuthController extends Controller
     }
 
     public function updateUser(Request $request){
-        $validator = Validator::make($request->all(), [
+        $user = auth()->user();
+        $user_id = $user->id;
+        $info_user = auth()->user()->info;
+        $data = Validator::make($request->all(), [
             'name' => 'required|string|between:2,100',
             'lname' => 'required|string|between:2,100',
-            'type' => 'required',
-            'email' => 'required|string|email|max:100|unique:users',
-            'password' => 'required|string|confirmed|min:6',
         ]);
+        $info = Validator::make($request->all(), [
+            'street' => 'string|between:1,100',
+            'apt' => 'string|between:1,100',
+            'city' => 'string|between:1,100',
+            'state' => 'string|between:1,100',
+            'zip' => 'string|between:1,100',
+            'phone' => 'string|between:1,15',
+        ]);
+        if($data->fails()){
+            return response()->json($data->errors(), 400);
+        }
+
+        if($request->hasFile('avatar')){
+            $avatar = Validator::make($request->all(), [
+                'avatar' => 'mimes:jpg,bmp,png,jpeg|required',
+            ]);
+            if($avatar->fails()){
+                return response()->json($avatar->errors(), 400);
+            }
+
+            $path = 'uploads/avatars/'.$user->id;
+            if (! Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->makeDirectory($path);
+            }
+
+            $store = Storage::disk('public')->putFile($path, $request->file('avatar'));
+            $user->info->update(['avatar' => $store]);
+        }
+
+
+        $user->update($data->validated());
+        $user->info->update($info->validated());
+
+
+        $user = auth()->user();
+
+        return $user;
+
     }
 
     /**

@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Chat;
+use App\Models\Item;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Models\ProductNote;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 use Validator;
+use Carbon\Carbon;
 
 class ActionController extends Controller
 {
@@ -95,4 +100,89 @@ class ActionController extends Controller
         ]);
 
     }
+
+    public function getChats(){
+        $user = auth()->user();
+
+        $chats = Chat::where('sender_id', $user->id)->orWhere('receiver_id', $user->id)->get();
+
+        return $chats;
+    }
+
+    public function getChat($id){
+        $user = auth()->user();
+
+        Chat::where('sender_id', $user->id)->where('receiver_id', $id)->orWhere('sender_id', $id)->where('receiver_id', $user->id)->update(['opened' => 1]);
+
+        $chats = Chat::where('sender_id', $user->id)->where('receiver_id', $id)->orWhere('sender_id', $id)->where('receiver_id', $user->id)->get();
+
+        return $chats;
+    }
+
+    public function sendChat(Request $request){
+        $user = auth()->user();
+        $receiver = $request->input('receiver_id');
+        $text = $request->input('text');
+
+        $chat = new Chat;
+        $chat->sender_id = $user->id;
+        $chat->receiver_id = $receiver;
+        $chat->text = $text;
+        $chat->save();
+
+        return  response()->json([
+            'success' => 'message sent!',
+            'text' => $text
+        ]);
+
+    }
+
+    function generateCode(){
+        $number = rand(100000000,999999999);
+        $checking = Transaction::where('number', $number)->first();
+        if (isset($checking)){
+            $this->generateCode();
+        }else{
+            return $number;
+        }
+    }
+
+    public function newRequest(Request $request){
+        $number = $this->generateCode();
+        $price = null;
+        $user = auth()->user();
+        if ($request->header('Content-Type', 'application/json')) {
+            $input = $request->all();
+            $input = $input["data"];
+            foreach ($input["order"] as $inp){
+                (int)$price = (int)$price + (int)Product::find($inp["product_id"])->price*(int)$inp["quantity"];
+            }
+            $transaction = new Transaction;
+            $transaction->number = $number;
+            $transaction->client_id = $user->id;
+            $transaction->requested_time = Carbon::parse($input["time"]);
+            $transaction->price = $price;
+            $final = $transaction->save();
+            foreach ($input["order"] as $inp){
+                $item = new Item;
+                $item->transaction_id = $transaction->id;
+                $item->quantity = $inp["quantity"];
+                $item->save();
+            }
+            if ($input["note"] != NULL){
+                $note = new ProductNote;
+                $note->transaction_id = $transaction->id;
+                $note->note = $input["note"];
+                $note->save();
+            }
+            return $request;
+        }else{
+            return  response()->json([
+                'error' => 'wrong datatype!',
+            ], 400);
+        }
+
+
+    }
+
 }
